@@ -1,0 +1,85 @@
+//@version=5
+// 1. Define strategy settings
+indicator(title="Tobacco [c4b]", overlay=true)
+
+length=input(25, title="Band Length")
+bd1=input(5, title="Frontrun Band Deviation")
+bd2=input(8, title="Initial Band Deviation")
+bd3=input(12, title="Final Band Deviation")
+
+// Make inputs that set the take profit % (optional)
+//longProfitPerc = input(title="Long Take Profit (%)", type=float, minval=0.0, step=0.1, defval=3) * 0.01
+//shortProfitPerc = input(title="Short Take Profit (%)", type=float, minval=0.0, step=0.1, defval=3) * 0.01
+
+// 2. Calculate strategy values
+
+kama(src, len) =>
+    kama = 0.0
+    val = math.sum(math.abs(src - src[1]), len) != 0 ? math.abs(src - src[len]) / math.sum(math.abs(src - src[1]), len) : 0
+    kama := nz(kama[1]) + math.pow(val * (0.288 - 0.0666) + 0.0666, 2) * (src - nz(kama[1]))
+
+rg = kama(ta.tr, length)
+basis = kama(close, length)
+upperBand = basis + rg*bd1
+upper2 = basis + rg*bd2
+upper3 = basis + rg*bd3
+lowerBand = basis - rg*bd1
+lower2 = basis - rg*bd2
+lower3 = basis - rg*bd3
+
+// Figure out take profit price
+//longExitPrice  = close * (1 + longProfitPerc)
+//shortExitPrice = close * (1 - shortProfitPerc)
+
+// 3. Output strategy data
+bascol = basis >= basis[1] ? color.lime : color.red
+plot(series=basis, title="BASIS", color=bascol)
+p1 = plot(series=upperBand, title="UB", color=color.red, linewidth=2)
+p2 = plot(upper2)
+p3 = plot(upper3)
+p4 = plot(series=lowerBand, title="LB", color=color.green, linewidth=2)
+p5 = plot(lower2)
+p6 = plot(lower3)
+fill(p1, p2, color = color.red)
+fill(p2, p3, color = color.red)
+fill(p4, p5, color = color.green)
+fill(p5, p6, color = color.green)
+
+plot(series=close, title="CLOSE", color=color.black, linewidth=2)
+//plot(series=open, title="OPEN", color=black, linewidth=2)
+     
+// 4. Determine long trading conditions
+enterLong = ta.crossover(close, lowerBand)
+exitLong  = ta.crossover(close, basis)
+limitLong = ta.crossunder(close, lower2)
+
+// 5. Code short trading conditions
+enterShort = ta.crossunder(close, upperBand)
+exitShort  = ta.crossunder(close, basis)
+limitShort = ta.crossover(close, upper2)
+
+            
+// 6. Submit entry orders
+//if (enterLong)
+//    if (strategy.position_size <= 0 )
+//        strategy.close_all()
+//        strategy.entry(id="EL", long=true)
+//        strategy.exit("XL", "EL", limit=close+(close*0.02), stop=close-(close*0.015))
+//if (enterShort)
+//    if (strategy.position_size >= 0)
+//        strategy.close_all()
+//        strategy.entry(id="ES", long=false)
+//        strategy.exit("XS", "ES", limit=close-(close*0.02), stop=close+(close*0.015))
+//if (limitShort or limitLong)
+//    strategy.close_all()
+
+// 8. Alerts
+
+alertcondition(condition=enterLong, title="Long")
+alertcondition(condition=enterShort, title="Short")
+
+alertcondition(condition=exitLong, title="Exit Long")
+alertcondition(condition=exitShort, title="Exit Short")
+
+alertcondition(condition=limitLong, title="Limit Long")
+alertcondition(condition=limitShort, title="Limit Short")
