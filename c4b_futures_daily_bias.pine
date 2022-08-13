@@ -1,0 +1,133 @@
+/ © SimpleCryptoLife
+//@version=4
+study(title="[SCL] BTC Futures Daily Bias [c4b]", shorttitle="[SCL] BTC Futures Bias", overlay=true, linktoseries=true)
+
+// ============================== ABOUT THIS SCRIPT ==================================
+
+// == COPYRIGHT ==
+// Script by @SimpleCrpytoLife. This script is open-source.
+// > If you use ideas from it, you don't need to ask or give credit to me.
+// > If you copy code out of here to adapt for your own script, it must be open-source. You don't need to ask permission, just credit @SimpleCryptoLife. Let me know if you make something cool.
+
+// == CREDITS ==
+// The underlying concepts came from a skilled and humble trader who wishes to remain anonymous. 
+
+// == DESCRIPTION ==
+// Derives a bias for BTC/USD on the daily timeframe and displays it on the chart in a configurable way. 
+// Takes price data from the CME BTC futures chart (exchange is configurable), regardless of what symbol you run it on.
+// Why? Because futures are said to give cleaner charts, but most traders are not trading CME futures. So you can use this indicator on whichever exchange you want to chart Bitcoin on.
+// Uses the 80D HMA and the 8D and 21D EMAs; all intervals are configurable. 
+// The script figures out which EMA is fast and which one is slow. The fast EMA is used as a price proxy, to reduce chop from price ranging above and below the HMA.
+// When the EMAs are in bullish order and the fast EMA is above the HMA, this is bullish. When the EMAs are in bearish order and the fast EMA is below the HMA, this is bearish.
+// When these signals are mixed (e.g. fast EMA below slow EMA but above HMA), this is neutral. You can choose to display neutral or not.
+
+// == USAGE ==
+// This tool gives you a bias. THESE ARE NOT SIGNALS. You could buy and sell spot (not margin) based simply on green/red flips, and it wouldn't be the worst strategy, but that's not what it's for.
+// It gives a long/short/neutral bias on a high timeframe, so that you can look for further TA to support longs or shorts respectively. But you need your own strategy for those trades.
+// It is intended to be run on a daily chart. There's nothing clever coded here with timeframes, so if you use it on e.g. a 4H chart, it will NOT keep the daily bias, but recalculate it for 4H.
+// It may or may not be useful on timeframes other than 1D.
+
+// == SETTINGS ==
+// Use Daily Prices From Exchange - Choose which exchange it pulls prices from:
+//      + CME Futures - Uses the CME BTC1! continuous contract in front. This is the reason the indicator was made.
+//      + Brave New Coin (BLX) - If you want more history for some reason. This exchange only stores daily closing prices.
+//      + Binance USDT - Who doesn't love Binance.
+// Show Neutral Bias - If true, include neutral market bias. If false, neutral after bullish is replaced with bullish, and neutral after bearish is replaced with bearish.
+// Colour Background - Display the current bias using a coloured background.
+// Plot Shapes to Show Transitions - Plot shapes to show when bias changes.
+// Show HMA - Display the HMA, or not.
+// HMA Interval - Configure the interval for the HMA.
+// Show EMAs - Display the EMAs, or not.
+// EMA 1 interval - Interval for the first EMA.
+// EMA 2 interval - Interval for the second EMA. It doesn't matter which way round you put the fast and slow EMAs.
+
+// == DISCLAIMER ==
+// You retain full responsibility for your trading at all times. Before trading with actual money, first make sure your risk management is professional-level.
+
+
+// ================= INPUTS =================
+
+string inputSourceExchange = input(type=input.string, defval="CME Futures", options=["CME Futures","Brave New Coin (BLX)","Binance USDT"], title="Use Daily Prices From Exchange")
+bool inputShowNeutral = input(type=input.bool, defval=false, title="Show Neutral Bias")
+bool inputShowBgColour = input(type=input.bool, defval=true, title="Colour Background")
+bool inputShowShapes = input(type=input.bool, defval=true, title="Plot Shapes to Show Transitions")
+bool inputShowHma = input(type=input.bool, defval=true, title="Show HMA")
+int inputHmaInterval = input(type=input.integer, defval=80, minval=0, maxval=200, title="HMA Interval")
+bool inputShowEmas = input(type=input.bool, defval=true, title="Show EMAs")
+int inputEma1Interval = input(type=input.integer, defval=8, minval=0, maxval=200, title="EMA 1 Interval")
+int inputEma2Interval = input(type=input.integer, defval=21, minval=0, maxval=200, title="EMA 2 Interval")
+
+// == Variables derived solely from inputs
+var int fastEmaInterval = min(inputEma1Interval,inputEma2Interval)
+var int slowEmaInterval = max(inputEma1Interval,inputEma2Interval)
+var string exchange = inputSourceExchange == "CME Futures" ? "CME:BTC1!" : inputSourceExchange == "Brave New Coin (BLX)" ? "BNC:BLX" : inputSourceExchange == "Binance USDT" ? "BINANCE:BTCUSDT" : na
+
+
+// ================= CALCULATIONS =================
+
+// Get the source from CME futures, BLX, or Binance
+source = security(exchange, timeframe.period, close)
+
+// Calculate the moving averages
+float hma = hma(source,inputHmaInterval)
+float ema1 = ema(source,inputEma1Interval)
+float ema2 = ema(source,inputEma2Interval)
+
+// Calculate initial bias
+string bias = ema1 > ema2 and ema1 > hma ? "Bullish" : ema1 < ema2 and ema1 < hma ? "Bearish" : "Neutral"
+
+// Bias if we include neutral
+bool isBullish = bias == "Bullish", isBearish = bias =="Bearish", isNeutral = bias =="Neutral"
+bool isNewBullish = isBullish and not isBullish[1], bool isNewBearish = isBearish and not isBearish[1], bool isNewNeutral = isNeutral and not isNeutral[1]
+
+// Bias if we exclude neutral
+var bool isBinaryBullish = na, var bool isBinaryBearish = na
+isBinaryBullish := isBullish ? true : isBearish ? false : isBinaryBullish[1] // Stays Bullish through neutral bias
+isBinaryBearish := isBearish ? true : isBullish ? false : isBinaryBearish[1] // Stays Bearish through neutral bias
+bool isBullReversal = isBinaryBullish and not isBinaryBullish[1], bool isBearReversal = isBinaryBearish and not isBinaryBearish[1]
+bool isNewBinaryBullish = isBinaryBullish and not isBinaryBullish[1], bool isNewBinaryBearish = isBinaryBearish and not isBinaryBearish[1]
+
+// Consolidate the signals and decide what to plot according to whether we're showing neutral mode
+string endBias = inputShowNeutral ? bias : isBinaryBullish ? "Bullish" : isBinaryBearish ? "Bearish" : na
+bool newBull = inputShowNeutral ? isNewBullish : isNewBinaryBullish
+bool newBear = inputShowNeutral ? isNewBearish : isNewBinaryBearish
+bool newNeutral = inputShowNeutral ? isNewNeutral : na
+
+bool plotBull = inputShowShapes and newBull
+bool plotBear = inputShowShapes and newBear
+bool plotNeutral = inputShowShapes and newNeutral
+
+// Calculate the background colour
+color backgroundColour = inputShowBgColour == false ? na : endBias == "Bullish" ? color.green : endBias == "Bearish" ? color.red : endBias == "Neutral" ? color.gray : na
+
+
+// ================= PLOTS =================
+
+// Turn lines on and off
+float hmaPlot = inputShowHma ? hma : na
+float ema1Plot = inputShowEmas ? ema1 : na
+float ema2Plot = inputShowEmas ? ema2 : na
+
+// Plots
+plot(hmaPlot, color=color.yellow, linewidth=3)
+plot(ema1Plot, color=color.green, linewidth=1)
+plot(ema2Plot, color=color.blue, linewidth=2)
+
+// Background colour
+bgcolor(backgroundColour, transp=70)
+
+// Plot shapes for change of bias
+plotshape(plotBull, title="Change to Bullish Bias", style=shape.triangleup, location=location.belowbar, color=color.green, size=size.small, transp=20)
+plotshape(plotBear, title="Change to Bearish Bias", style=shape.triangledown, location=location.abovebar, color=color.red, size=size.small, transp=20)
+plotshape(plotNeutral, title="Change to Neutral Bias", style=shape.circle, location=location.abovebar, color=color.gray, size=size.small, transp=20)
+
+
+alertcondition(plotBull, title=".Change to Bullish Bias")
+alertcondition(plotBear, title=".Change to Bearish Bias")
+alertcondition(plotNeutral, title=".Change to Neutral Bias")
+
+// ======================================================= //
+//                                                         //
+//   (╯°□°）╯︵      ¡ʇᴉɐʍ `oN ˙ʍol llǝs `ɥƃᴉɥ ʎnB         //
+//                                                         //
+// ======================================================= //

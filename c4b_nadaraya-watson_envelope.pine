@@ -2,7 +2,7 @@
 // © LuxAlgo
 //@version=5
 
-indicator("Nadaraya-Watson Envelope [C4B]",overlay=true,max_bars_back=1000,max_lines_count=500,max_labels_count=500)
+indicator("Nadaraya-Watson Envelope [c4b]",overlay=true,max_bars_back=1000,max_lines_count=500,max_labels_count=500)
 length = input.float(500,'Window Size',maxval=500,minval=0)
 h      = input.float(8.,'Bandwidth')
 mult   = input.float(3.) 
